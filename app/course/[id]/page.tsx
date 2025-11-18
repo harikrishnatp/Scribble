@@ -448,6 +448,7 @@ export default function CoursePage() {
                       key={selectedVideo.id}
                       videoId={selectedVideo.id}
                       videoTitle={selectedVideo.title}
+                      videoDescription={selectedVideo.description}
                       onSaveQuizAnswers={saveVideoQuizAnswers}
                     />
                   ) : (

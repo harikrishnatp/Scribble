@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, XCircle, RotateCcw, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, RotateCcw, AlertCircle, Loader2, Sparkles } from "lucide-react";
 
 interface QuizQuestion {
   id: string;
@@ -19,38 +19,76 @@ interface QuizQuestion {
 interface VideoQuizProps {
   videoId: string;
   videoTitle: string;
+  videoDescription?: string;
   onSaveQuizAnswers?: (videoId: string, answers: Record<string, number>) => void;
 }
 
-export function VideoQuiz({ videoId, videoTitle, onSaveQuizAnswers }: VideoQuizProps) {
-  // Sample quiz questions - in production these would come from props or API
-  const [questions] = useState<QuizQuestion[]>([
-    {
-      id: "q1",
-      question: "What is the main concept covered in this video?",
-      options: ["Option A", "Option B", "Option C", "Option D"],
-      correctAnswer: 0,
-      explanation: "This is the correct answer because...",
-    },
-    {
-      id: "q2",
-      question: "Which of the following best describes the topic?",
-      options: ["Option A", "Option B", "Option C", "Option D"],
-      correctAnswer: 1,
-      explanation: "This is the correct answer because...",
-    },
-    {
-      id: "q3",
-      question: "How would you apply this concept?",
-      options: ["Option A", "Option B", "Option C", "Option D"],
-      correctAnswer: 2,
-      explanation: "This is the correct answer because...",
-    },
-  ]);
+export function VideoQuiz({ videoId, videoTitle, videoDescription, onSaveQuizAnswers }: VideoQuizProps) {
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [quizGenerated, setQuizGenerated] = useState(false);
 
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [showExplanations, setShowExplanations] = useState(false);
+
+  // Load cached quiz for this video
+  useEffect(() => {
+    const cachedQuizzes = localStorage.getItem("videoQuizzes");
+    if (cachedQuizzes) {
+      try {
+        const quizzes = JSON.parse(cachedQuizzes);
+        if (quizzes[videoId]) {
+          setQuestions(quizzes[videoId]);
+          setQuizGenerated(true);
+        }
+      } catch (e) {
+        console.error("Error loading cached quiz:", e);
+      }
+    }
+  }, [videoId]);
+
+  const generateQuiz = async () => {
+    setIsLoading(true);
+    setError("");
+    setQuestions([]);
+    setAnswers({});
+    setSubmitted(false);
+
+    try {
+      const response = await fetch("/api/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoTitle,
+          videoDescription,
+          numberOfQuestions: 5,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        setError(data.error || "Failed to generate quiz");
+        return;
+      }
+
+      setQuestions(data.questions);
+      setQuizGenerated(true);
+
+      // Cache the quiz in localStorage
+      const cachedQuizzes = localStorage.getItem("videoQuizzes");
+      const quizzes = cachedQuizzes ? JSON.parse(cachedQuizzes) : {};
+      quizzes[videoId] = data.questions;
+      localStorage.setItem("videoQuizzes", JSON.stringify(quizzes));
+    } catch (err: any) {
+      setError(err.message || "Failed to generate quiz");
+      console.error("Error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAnswerSelect = (questionId: string, optionIndex: number) => {
     if (!submitted) {
@@ -78,18 +116,63 @@ export function VideoQuiz({ videoId, videoTitle, onSaveQuizAnswers }: VideoQuizP
   const correctCount = questions.filter(
     (q) => answers[q.id] === q.correctAnswer
   ).length;
-  const score = Math.round((correctCount / questions.length) * 100);
+  const score = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
 
   const allAnswered = questions.every((q) => answers[q.id] !== undefined);
+
+  // If no quiz generated yet, show generate button
+  if (!quizGenerated || questions.length === 0) {
+    return (
+      <div className="space-y-4">
+        <Card className="bg-zinc-900 border border-zinc-700">
+          <CardHeader>
+            <CardTitle className="text-lg">Quiz: {videoTitle}</CardTitle>
+            <p className="text-sm text-gray-400 mt-2">
+              Generate an AI-powered quiz to test your understanding
+            </p>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-700 rounded text-sm text-red-400">
+                {error}
+              </div>
+            )}
+            <Button
+              onClick={generateQuiz}
+              disabled={isLoading}
+              className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-6"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  Generating Quiz...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5 mr-2" />
+                  Generate Quiz with AI
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <Card className="bg-zinc-900 border border-zinc-700">
         <CardHeader>
           <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="text-lg">Quiz: {videoTitle}</CardTitle>
-              <p className="text-sm text-gray-400 mt-2">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <CardTitle className="text-lg">Quiz: {videoTitle}</CardTitle>
+                <Badge variant="secondary" className="bg-green-900/30 text-green-400 border-green-700">
+                  AI Generated
+                </Badge>
+              </div>
+              <p className="text-sm text-gray-400">
                 Test your understanding of this video
               </p>
             </div>
@@ -232,6 +315,18 @@ export function VideoQuiz({ videoId, videoTitle, onSaveQuizAnswers }: VideoQuizP
       {!submitted ? (
         <div className="flex gap-3 pt-4">
           <Button
+            onClick={() => {
+              setQuizGenerated(false);
+              setQuestions([]);
+            }}
+            variant="outline"
+            className="border-zinc-600 text-white hover:bg-zinc-800 py-6"
+            disabled={isLoading}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            New Quiz
+          </Button>
+          <Button
             onClick={handleSubmit}
             disabled={!allAnswered}
             className="flex-1 bg-white text-black hover:bg-gray-200 font-semibold py-6"
@@ -244,10 +339,23 @@ export function VideoQuiz({ videoId, videoTitle, onSaveQuizAnswers }: VideoQuizP
           <Button
             onClick={handleReset}
             variant="outline"
-            className="flex-1 border-zinc-600 text-white hover:bg-zinc-800 py-6"
+            className="border-zinc-600 text-white hover:bg-zinc-800 py-6"
           >
             <RotateCcw className="h-4 w-4 mr-2" />
-            Retake Quiz
+            Retake
+          </Button>
+          <Button
+            onClick={() => {
+              setQuizGenerated(false);
+              setQuestions([]);
+              setAnswers({});
+              setSubmitted(false);
+            }}
+            variant="outline"
+            className="border-zinc-600 text-white hover:bg-zinc-800 py-6"
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            New Quiz
           </Button>
           <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-4 flex items-center justify-center">
             <div className="text-center">

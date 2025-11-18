@@ -9,7 +9,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "GEMINI_API_KEY is not set. Add it to your .env.local file",
+          error: "GEMINI_API_KEY is not set. Add it to your .env file",
         },
         { status: 400 }
       )
@@ -77,7 +77,7 @@ Additional Resources & References
 
 Make sure the content is well-structured with proper spacing. Do NOT use # or ## symbols - just use line breaks and indentation for structure.`
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
     const result = await model.generateContent(prompt)
     const assignmentText = result.response.text()
 
