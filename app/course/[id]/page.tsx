@@ -10,7 +10,7 @@ import { ArrowLeft, Play, BookOpen, FileText, CheckCircle2, Share2, Trash2, Stic
 import Link from "next/link";
 import { QuizSection } from "@/components/quiz-section";
 import { DocumentationSection } from "@/components/documentation-section";
-import { VideoNotes } from "@/components/video-notes";
+import { VideoNotesEnhanced } from "@/components/video-notes-enhanced";
 import { VideoQuiz } from "@/components/video-quiz";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import Image from "next/image";
@@ -27,6 +27,7 @@ export default function CoursePage() {
   const [loading, setLoading] = useState(true);
   const [completedVideos, setCompletedVideos] = useState(0);
   const [videoNotes, setVideoNotes] = useState<Record<string, string>>({});
+  const [videoTimestampedNotes, setVideoTimestampedNotes] = useState<Record<string, any[]>>({});
   const [videoQuizAnswers, setVideoQuizAnswers] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
@@ -46,12 +47,17 @@ export default function CoursePage() {
           setCompletedVideos(completed);
           // Load notes for all videos
           const notes: Record<string, string> = {};
+          const tsNotes: Record<string, any[]> = {};
           found.videos?.forEach((video: any) => {
             if (video.notes) {
               notes[video.id] = video.notes;
             }
+            if (video.timestampedNotes) {
+              tsNotes[video.id] = video.timestampedNotes;
+            }
           });
           setVideoNotes(notes);
+          setVideoTimestampedNotes(tsNotes);
         }
       } catch (e) {
         console.error("Error fetching playlist:", e);
@@ -154,6 +160,37 @@ export default function CoursePage() {
         localStorage.setItem("userPlaylists", JSON.stringify(updated));
       } catch (e) {
         console.error("Error saving notes:", e);
+      }
+    }
+  };
+
+  const saveVideoTimestampedNotes = (videoId: string, timestampedNotes: any[]) => {
+    // Update local state
+    setVideoTimestampedNotes((prev) => ({
+      ...prev,
+      [videoId]: timestampedNotes,
+    }));
+
+    // Update playlist with timestamped notes
+    const updatedPlaylist = {
+      ...playlist,
+      videos: playlist.videos.map((v: any) =>
+        v.id === videoId ? { ...v, timestampedNotes } : v
+      ),
+    };
+    setPlaylist(updatedPlaylist);
+
+    // Persist to localStorage
+    const storedPlaylists = localStorage.getItem("userPlaylists");
+    if (storedPlaylists) {
+      try {
+        const parsedPlaylists = JSON.parse(storedPlaylists);
+        const updated = parsedPlaylists.map((p: any) =>
+          p.id === courseId || p.playlistId === courseId ? updatedPlaylist : p
+        );
+        localStorage.setItem("userPlaylists", JSON.stringify(updated));
+      } catch (e) {
+        console.error("Error saving timestamped notes:", e);
       }
     }
   };
@@ -374,12 +411,15 @@ export default function CoursePage() {
 
               {/* Video Notes */}
               {selectedVideo && (
-                <VideoNotes
+                <VideoNotesEnhanced
                   key={selectedVideo.id}
                   videoId={selectedVideo.id}
                   videoTitle={selectedVideo.title}
+                  videoDescription={selectedVideo.description}
                   notes={videoNotes[selectedVideo.id] || ""}
+                  timestampedNotes={videoTimestampedNotes[selectedVideo.id] || []}
                   onSaveNotes={saveVideoNotes}
+                  onSaveTimestampedNotes={saveVideoTimestampedNotes}
                 />
               )}
 
